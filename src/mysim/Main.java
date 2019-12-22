@@ -1,13 +1,22 @@
 package mysim;
 
 import java.io.*;
+import java.util.*;
 
 public class Main {
 
-    static CircuitSimulator simulator = new CircuitSimulator();
-    static String benchFile = "d:/ISCAS85/bench/c432.bench.txt";
-    static String ipFile = "d:/ISCAS85/ip/c432_1m_ip.txt";
-    static String opFile = ipFile.replaceAll("ip", "op");
+    //configs
+    final static String BENCH_FILE = "c:/ISCAS85/bench/c432.bench.txt";
+    final static String INPUT_FILE = "c:/ISCAS85/ip/c432_1m_ip.txt";
+    final static String OUTPUT_FILE = INPUT_FILE.replaceAll("ip", "op");
+    final static int NUMBER_OF_THREAD = 1;
+    //variables
+    static int[] fromIndex = new int[NUMBER_OF_THREAD];
+    static int[] toIndex = new int[NUMBER_OF_THREAD];
+    static CircuitSimulator[] simulators = new CircuitSimulator[NUMBER_OF_THREAD];
+    static List<String> ipvs = new ArrayList<>();
+    static List<String> opvs = new ArrayList<>();
+    static int inputSize;
 
     public static void main(String[] args) throws Exception {
         long start = System.currentTimeMillis();
@@ -17,24 +26,63 @@ public class Main {
                 (System.currentTimeMillis() - start) / 1000.0);
     }
 
-    public static void simulation() throws Exception {
-        BufferedReader br = new BufferedReader(new FileReader(ipFile));
-        BufferedWriter bw = new BufferedWriter(new FileWriter(opFile));
-        String ipvs = "", opvs = "";
-        // 讀取輸入訊號檔案(xxx_ip.txt)，並進行邏輯閘運算，產生輸出。
-        while ((ipvs = br.readLine()) != null) {
-            ipvs = ipvs.trim(); // 如"01010011"的輸入
-            simulator.fillInput(ipvs);
-            opvs = simulator.getOuputs();
-            bw.write(ipvs + " " + opvs);
+    private static void simulation() throws Exception {
+        BufferedReader br = new BufferedReader(new FileReader(INPUT_FILE));
+        BufferedWriter bw = new BufferedWriter(new FileWriter(OUTPUT_FILE));
+        String aLine;
+        while ((aLine = br.readLine()) != null) {
+            ipvs.add(aLine.trim());
+        }
+        inputSize = ipvs.size();
+        startThreads();
+        //gather outputs
+        for (int i = 0; i < inputSize; i++) {
+            bw.write(ipvs.get(i) + " " + opvs.get(i));
             bw.newLine();
         }
         br.close();
         bw.close();
     }
 
-    public static void buildCircuit() throws Exception {
-        BufferedReader br = new BufferedReader(new FileReader(benchFile));
+    private static void startThreads() {
+        System.out.println("input size = " + inputSize);
+        calculateBounds();
+        //run threads
+        MyThread[] threads = new MyThread[NUMBER_OF_THREAD];
+        for (int i = 0; i < NUMBER_OF_THREAD; i++) {
+            System.out.printf("from = %d , to = %d\n", fromIndex[i], toIndex[i]);
+            threads[i] = new MyThread(fromIndex[i], toIndex[i], simulators[i], opvs);
+            threads[i].start();
+        }
+        for (int i = 0; i < NUMBER_OF_THREAD; i++) {
+            try {
+                threads[i].join();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+        }
+    }
+
+    private static void calculateBounds() {
+        int segmentSize = (int) Math.ceil(1.0 * inputSize / NUMBER_OF_THREAD);
+        int indexIncrement = segmentSize - 1;
+        for (int i = 0, index = 0; i < NUMBER_OF_THREAD; i++, index += segmentSize) {
+            fromIndex[i] = index;
+            toIndex[i] = index + indexIncrement;
+        }
+        //make sure the last segment not out of bound
+        int indexOfLastSegment = toIndex.length - 1;
+        int indexOfLastInput = inputSize - 1;
+        if (toIndex[indexOfLastSegment] > indexOfLastInput) {
+            toIndex[indexOfLastSegment] = indexOfLastInput;
+        }
+    }
+
+    private static void buildCircuit() throws Exception {
+        for (int i = 0; i < NUMBER_OF_THREAD; i++) {
+            simulators[i] = new CircuitSimulator();
+        }
+        BufferedReader br = new BufferedReader(new FileReader(BENCH_FILE));
         String aLine = "";
         while ((aLine = br.readLine()) != null) {
             if (aLine.startsWith("#") || aLine.trim().length() == 0) {
@@ -47,7 +95,9 @@ public class Main {
             if (aLine.startsWith("INPUT")) {
                 String[] tt = aLine.split("\\(");
                 tt[1] = tt[1].replace(")", "");
-                simulator.addInputGate(tt[1]);
+                for (int i = 0; i < NUMBER_OF_THREAD; i++) {
+                    simulators[i].addInputGate(tt[1]);
+                }
             } else {
                 break;
             }
@@ -57,7 +107,9 @@ public class Main {
             if (aLine.startsWith("OUTPUT")) {
                 String[] tt = aLine.split("\\(");
                 tt[1] = tt[1].replace(")", "");
-                simulator.addOutputGate(tt[1]);
+                for (int i = 0; i < NUMBER_OF_THREAD; i++) {
+                    simulators[i].addOutputGate(tt[1]);
+                }
             } else {
                 //pass an empty line
                 aLine = br.readLine();
@@ -71,9 +123,34 @@ public class Main {
             aLine = aLine.replace("(", ",");
             aLine = aLine.replace(")", "");
             String[] tt = aLine.split(",");
-            simulator.addConfigString(tt);
+            for (int i = 0; i < NUMBER_OF_THREAD; i++) {
+                simulators[i].addConfigString(tt);
+            }
         } while ((aLine = br.readLine()) != null);
         br.close();
-        simulator.buildCircuitByConfig();
+        for (int i = 0; i < NUMBER_OF_THREAD; i++) {
+            simulators[i].buildCircuitByConfig();
+        }
+    }
+}
+
+class MyThread extends Thread {
+
+    int fromIndex, toIndex;
+    CircuitSimulator sim;
+
+    MyThread() {
+
+    }
+
+    MyThread(int fromIndex, int toIndex, CircuitSimulator sim, List<String> opvs) {
+        this.fromIndex = fromIndex;
+        this.toIndex = toIndex;
+        this.sim = sim;
+    }
+
+    @Override
+    public void run() {
+
     }
 }
