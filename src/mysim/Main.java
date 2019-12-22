@@ -9,13 +9,13 @@ public class Main {
     final static String BENCH_FILE = "c:/ISCAS85/bench/c432.bench.txt";
     final static String INPUT_FILE = "c:/ISCAS85/ip/c432_1m_ip.txt";
     final static String OUTPUT_FILE = INPUT_FILE.replaceAll("ip", "op");
-    final static int NUMBER_OF_THREAD = 1;
+    final static int NUMBER_OF_THREAD = 2;
     //variables
     static int[] fromIndex = new int[NUMBER_OF_THREAD];
     static int[] toIndex = new int[NUMBER_OF_THREAD];
     static CircuitSimulator[] simulators = new CircuitSimulator[NUMBER_OF_THREAD];
     static List<String> ipvs = new ArrayList<>();
-    static List<String> opvs = new ArrayList<>();
+    static String[] opvs;
     static int inputSize;
 
     public static void main(String[] args) throws Exception {
@@ -37,7 +37,7 @@ public class Main {
         startThreads();
         //gather outputs
         for (int i = 0; i < inputSize; i++) {
-            bw.write(ipvs.get(i) + " " + opvs.get(i));
+            bw.write(ipvs.get(i) + " " + opvs[i]);
             bw.newLine();
         }
         br.close();
@@ -45,13 +45,14 @@ public class Main {
     }
 
     private static void startThreads() {
+        opvs = new String[inputSize];
         System.out.println("input size = " + inputSize);
         calculateBounds();
         //run threads
         MyThread[] threads = new MyThread[NUMBER_OF_THREAD];
         for (int i = 0; i < NUMBER_OF_THREAD; i++) {
             System.out.printf("from = %d , to = %d\n", fromIndex[i], toIndex[i]);
-            threads[i] = new MyThread(fromIndex[i], toIndex[i], simulators[i], opvs);
+            threads[i] = new MyThread(fromIndex[i], toIndex[i], simulators[i], ipvs, opvs);
             threads[i].start();
         }
         for (int i = 0; i < NUMBER_OF_THREAD; i++) {
@@ -137,20 +138,27 @@ public class Main {
 class MyThread extends Thread {
 
     int fromIndex, toIndex;
+    List<String> ipvs;
+    String[] opvs;
     CircuitSimulator sim;
 
     MyThread() {
 
     }
 
-    MyThread(int fromIndex, int toIndex, CircuitSimulator sim, List<String> opvs) {
+    MyThread(int fromIndex, int toIndex, CircuitSimulator sim, List<String> ipvs, String[] opvs) {
         this.fromIndex = fromIndex;
         this.toIndex = toIndex;
         this.sim = sim;
+        this.ipvs = ipvs;
+        this.opvs = opvs;
     }
 
     @Override
     public void run() {
-
+        for (int i = fromIndex; i <= toIndex; i++) {
+            sim.fillInput(ipvs.get(i));
+            opvs[i] = sim.getOuputs();
+        }
     }
 }
