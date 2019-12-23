@@ -81,7 +81,7 @@ public class BenchLevelizer {
             }
             //output gates
             for (Gate g : ready) {
-                System.out.println(g.name + " " + g.level);
+                // System.out.println(g.name + " " + g.level);
                 bw.write(g.originalString);
                 bw.newLine();
             }
