@@ -15,12 +15,16 @@ public class BenchLevelizer {
     static HashMap<String, Gate> gates = new HashMap<>();
 
     public static void main(String[] args) {
-        readUXBench(UX_BENCH_FILE);
-        start();
-        writeLevelizedBeanch(LEVELIZED_BENCH_FILE);
+        levelize(UX_BENCH_FILE, LEVELIZED_BENCH_FILE);
     }
 
-    public static void readUXBench(String path) {
+    public static void levelize(String src, String dest) {
+        readUXBench(src);
+        start();
+        writeLevelizedBeanch(dest);
+    }
+
+    private static void readUXBench(String path) {
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             String aLine;
             //skips comments , inputs and outputs
